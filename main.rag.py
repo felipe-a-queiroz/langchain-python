@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain_community.document_loaders import TextLoader
+from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
@@ -22,7 +22,20 @@ embeddings = GoogleGenerativeAIEmbeddings(
 )
 
 # Pipeline de ingestão de documentos
-## Extração do documento
+
+## Extração dos documentos PDF
+arquivos = [
+    "documentos/GTB_standard_Nov23.pdf",
+    "documentos/GTB_gold_Nov23.pdf",
+    "documentos/GTB_platinum_Nov23.pdf"
+]
+
+documentos = sum(
+    [PyPDFLoader(arquivo).load() for arquivo in arquivos],
+    []
+)
+
+## Extração do documento TXT
 documento = TextLoader(
     "documentos/GTB_gold_Nov23.txt",
     encoding="utf-8",
@@ -32,7 +45,7 @@ documento = TextLoader(
 chunks = RecursiveCharacterTextSplitter(
     chunk_size=1000,
     chunk_overlap=100
-).split_documents(documento)
+).split_documents(documentos)
 
 ## Faz o embedding e carrega os pedaços no FAISS
 dados_recuperados = FAISS.from_documents(
@@ -47,6 +60,7 @@ prompt_consulta_seguro = ChatPromptTemplate.from_messages([
 cadeia = prompt_consulta_seguro | modelo | StrOutputParser()
 
 def responder_pergunta(pergunta: str) -> str:
+    print(f"Pergunta: {pergunta}")
     documents = dados_recuperados.invoke(pergunta)
     contexto = "\n\n".join([doc.page_content for doc in documents])
     resposta = cadeia.invoke({
@@ -55,4 +69,5 @@ def responder_pergunta(pergunta: str) -> str:
     })
     return resposta
 
-print(responder_pergunta("Como devo proceder caso tenha um item roubado?"))
+print(f"Resposta: {responder_pergunta("Como devo proceder caso tenha um item comprado roubado e caso eu tenha o cartão gold")}")
+print(f"Resposta: {responder_pergunta("Como devo proceder caso tenha um item comprado roubado e caso eu tenha o cartão platinum")}")
