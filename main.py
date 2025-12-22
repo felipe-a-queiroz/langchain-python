@@ -1,5 +1,5 @@
-# Importa ChatOpenAI do langchain_openai para interagir com modelos de linguagem
-from langchain_openai import ChatOpenAI
+# Importa ChatGoogleGenerativeAI do langchain_google_genai para interagir com o modelo de linguagem do Google
+from langchain_google_genai import ChatGoogleGenerativeAI
 # Importa PromptTemplate do langchain_core para criar templates de prompts
 from langchain_core.prompts import PromptTemplate
 # Importa JsonOutputParser e StrOutputParser do langchain_core para processar saídas do modelo
@@ -9,47 +9,76 @@ from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from pydantic import Field, BaseModel
 # Importa set_debug do langchain_core.globals para configurar o modo de depuração
 from langchain_core.globals import set_debug
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+api_key = os.environ.get("GOOGLE_API_KEY")
 
 # Ativando o modo de depuração para obter mais informações durante a execução
 set_debug(True)
 
-# Definindo o modelo de dados para a resposta esperada
+# Definindo o modelo de dados para a cidade sugerida
 class Destino(BaseModel):
     cidade: str = Field(description="Nome da cidade sugerida")
     motivo: str = Field(description="Motivo pelo qual a cidade foi sugerida")
 
+# Definindo o modelo de dados para a lista de restaurantes
+class Restaurantes(BaseModel):
+    cidade: str = Field(description="A cidade recomendada para visitar")
+    restaurantes: str = Field(description="Lista de restaurantes recomendados na cidade")
+
 # Definindo o parser de saída para converter a resposta do modelo em um objeto Pydantic
-parseador = JsonOutputParser(pydantic_object=Destino)
+parseador_destino = JsonOutputParser(pydantic_object=Destino)
+parseador_restaurantes = JsonOutputParser(pydantic_object=Restaurantes)
 
 # Definindo o prompt para sugerir uma cidade com base no interesse do usuário
 prompt_cidade = PromptTemplate(
     template="""
-        Sugira uma cidade dado o meu interesse em {interesse}.
+        Sugira um nome de cidade real dado o meu interesse em {interesse}. 
         {formato_de_saida}
     """,
     input_variables=["interesse"],
-    partial_variables={"formato_de_saida": parseador.get_format_instructions()},
+    output_parser=parseador_destino,
+    partial_variables={"formato_de_saida": parseador_destino.get_format_instructions()},
 )
 
-# Definindo o interesse do usuário
-interesse = "catolicismo e arquitetura gótica europeia"
+prompt_restaurantes = PromptTemplate(
+    template="""
+        Sugira uma lista de restaurantes em {cidade}.
+        {formato_de_saida}
+    """,
+    input_variables=["cidade"],
+    output_parser=parseador_restaurantes,
+    partial_variables={"formato_de_saida": parseador_restaurantes.get_format_instructions()},
+)
+
+prompt_cultural = PromptTemplate(
+    template="""
+        Sugira atividades e locais culturais para visitar em {cidade}.
+    """,
+    input_variables=["cidade"],
+)
 
 # Configurando o modelo de linguagem local
-modelo = ChatOpenAI(
-    model="local-model",
+modelo = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash-lite",
     temperature=0.7,
-    api_key="lm-studio",
-    base_url="http://127.0.0.1:1234/v1"
+    api_key=api_key,
 )
 
 
 # Criando a cadeia de processamento com LCEL
-cadeia = prompt_cidade | modelo | parseador
+cadeia_1 = prompt_cidade | modelo | parseador_destino
+cadeia_2 = prompt_restaurantes | modelo | parseador_restaurantes
+cadeia_3 = prompt_cultural | modelo | StrOutputParser()
+
+cadeia = (cadeia_1 | cadeia_2 | cadeia_3)
 
 # Invocando a cadeia com o interesse do usuário
 resposta = cadeia.invoke(
     {
-        "interesse": interesse
+        "interesse": "catolicismo e arquitetura gótica",
     }
 )
 
