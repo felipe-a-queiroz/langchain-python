@@ -10,7 +10,11 @@ from dotenv import load_dotenv
 import os
 # Importando Literal e TypeDict para definir tipos literais em modelos de dados
 from typing import Literal, TypedDict
-
+# Importando RunnableConfig para gerenciar configuração de runnables
+from langchain_core.runnables.config import RunnableConfig
+# Importando StateGraph para criar grafos de estado
+from langgraph.graph import StateGraph, START, END
+import asyncio
 
 load_dotenv()
 api_key = os.environ.get("GOOGLE_API_KEY")
@@ -63,12 +67,41 @@ prompt_roteador = ChatPromptTemplate.from_messages(
 # Definindo o roteador que decide qual consultor usar com base na consulta do usuário
 roteador = prompt_roteador | modelo.with_structured_output(Rota)
 
-# Função para processar a consulta do usuário e direcioná-la ao consultor apropriado, sem usar o LangGraph
-def response(query: str) -> str:
-    rota = roteador.invoke({"query": query})["destino"]
-    if rota == "praia":
-        return cadeia_praia.invoke({"query": query})
-    else:
-        return cadeia_montanha.invoke({"query": query})
-    
-print(response("Quero surfar em um lugar de águas cristalinas."))
+class Estado(TypedDict):
+    query: str
+    destino: Rota
+    resposta: str
+
+async def no_roteador(estado: Estado, config=RunnableConfig):
+    return {"destino": await roteador.ainvoke({"query": estado["query"]}, config=config)}
+
+async def no_praia(estado: Estado, config=RunnableConfig):
+    return {"resposta": await cadeia_praia.ainvoke({"query": estado["query"]}, config=config)}
+
+async def no_montanha(estado: Estado, config=RunnableConfig):
+    return {"resposta": await cadeia_montanha.ainvoke({"query": estado["query"]}, config=config)}
+
+def escolher_no(estado: Estado) -> Literal["praia", "montanha"]:
+    return "praia" if estado["destino"]["destino"] == "praia" else "montanha"
+
+grafo = StateGraph(Estado)
+grafo.add_node("rotear", no_roteador)
+grafo.add_node("praia", no_praia)
+grafo.add_node("montanha", no_montanha)
+
+grafo.add_edge(START, "rotear")
+grafo.add_conditional_edges("rotear", escolher_no)
+grafo.add_edge("praia", END)
+grafo.add_edge("montanha", END)
+
+app = grafo.compile()
+
+async def main():
+    resposta = await app.ainvoke(
+        {
+            "query": "Quero visitar um lugar no nordeste brasileiro, famoso por suas praias."
+        }
+    )
+    print(resposta["resposta"])
+
+asyncio.run(main())
