@@ -15,6 +15,10 @@ from langchain_core.runnables.config import RunnableConfig
 # Importando StateGraph para criar grafos de estado
 from langgraph.graph import StateGraph, START, END
 import asyncio
+from langchain_core.globals import set_debug
+set_debug(True)
+
+# Carregando variáveis de ambiente a partir de um arquivo .env
 
 load_dotenv()
 api_key = os.environ.get("GOOGLE_API_KEY")
@@ -99,7 +103,7 @@ app = grafo.compile()
 async def main():
     resposta = await app.ainvoke(
         {
-            "query": "Quero visitar um lugar no nordeste brasileiro, famoso por suas praias."
+            "query": "Quero visitar um lugar na europa, com neve para eu praticar ski."
         }
     )
     print(resposta["resposta"])

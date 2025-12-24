@@ -6,12 +6,14 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import os
+from langchain_core.globals import set_debug
+set_debug(True)
 
 load_dotenv()
 api_key = os.environ.get("GOOGLE_API_KEY")
 
 modelo = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash-lite",
+    model="gemini-2.5-flash",
     temperature=0.5,
     api_key=api_key,
 )
