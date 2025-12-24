@@ -6,3 +6,4 @@ langchain-core
 faiss-cpu
 langchain-community
 pypdf
+bs4
