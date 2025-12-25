@@ -8,3 +8,4 @@ langchain-community
 pypdf
 bs4
 tiktoken
+langchain_experimental

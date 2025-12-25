@@ -5,6 +5,7 @@ from langchain_community.document_loaders import WebBaseLoader
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 set_debug(False)
@@ -13,7 +14,7 @@ load_dotenv()
 api_key = os.environ.get("GOOGLE_API_KEY")
 
 modelo = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+    model="gemini-2.5-flash-lite",
     temperature=0.5,
     api_key=api_key,
 )
@@ -33,10 +34,6 @@ chunks_por_caracter = RecursiveCharacterTextSplitter(
 ).split_documents(documento)
 
 print(f"Número de chunks por caracter: {len(chunks_por_caracter)}")
-for i, chunk in enumerate(chunks_por_caracter):
-    print(f"--- Chunk por caracter {i+1} ---")
-    print(chunk.page_content)
-    print("\n")
 
 chunks_por_token = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
     encoding_name="cl100k_base",
@@ -45,10 +42,10 @@ chunks_por_token = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
 ).split_documents(documento)
 
 print(f"Número de chunks por token: {len(chunks_por_token)}")
-for i, chunk in enumerate(chunks_por_token):
-    print(f"--- Chunk por token {i+1} ---")
-    print(chunk.page_content)
-    print("\n")
+
+chunks_semanticos = SemanticChunker(embeddings).split_documents(documento)
+
+print(f"Número de chunks semânticos: {len(chunks_semanticos)}")
 
 dados_recuperados_por_caracteres = FAISS.from_documents(
     chunks_por_token, embeddings
@@ -57,6 +54,11 @@ dados_recuperados_por_caracteres = FAISS.from_documents(
 dados_recuperados_por_tokens = FAISS.from_documents(
     chunks_por_token, embeddings
 ).as_retriever(search_kwargs={"k":2})
+
+dados_recuperados_por_semantico = FAISS.from_documents(
+    chunks_semanticos, embeddings
+).as_retriever(search_kwargs={"k":2})
+
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", "Responda usando exclusivamente o conteúdo fornecido"),
@@ -85,6 +87,17 @@ def responder_pergunta_por_tokens(pergunta: str) -> None:
     print(f"--- Resposta por tokens: {resposta}")
     print("\n")
 
+def responder_pergunta_por_semantico(pergunta: str) -> None:
+    documentos = dados_recuperados_por_semantico.invoke(pergunta)
+    contexto = "\n\n".join([doc.page_content for doc in documentos])
+    resposta = cadeia.invoke({
+        "query": pergunta,
+        "contexto": contexto
+    })
+    print(f"--- Resposta por semântico: {resposta}")
+    print("\n")
+
+
 perguntas = [
     "Qual a opinião dos primeiros padres da igreja sobre o papel da Virgem Maria na redenção?",
     "O que significa o título 'Corredentora' atribuído à Virgem Maria?",
@@ -93,3 +106,4 @@ for i, query in enumerate(perguntas):
     print(f"\n\nPergunta {i+1}: {query}")
     responder_pergunta_por_caracteres(query)
     responder_pergunta_por_tokens(query)
+    responder_pergunta_por_semantico(query)
