@@ -9,3 +9,4 @@ pypdf
 bs4
 tiktoken
 langchain_experimental
+pydantic==2.12
